@@ -13,16 +13,40 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _registerUser() async {
-    final url = Uri.parse('http://autolink.blog/safeapi/register_user');
+    print('First Name: ${_firstNameController.text}');
+    print('Last Name: ${_lastNameController.text}');
+    print('Email: ${_emailController.text}');
+    print('Password: ${_passwordController.text}');
+
+    if (_firstNameController.text.trim().isEmpty ||
+        _lastNameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
+      _showError('Please fill out all the fields.');
+      return;
+    }
+
+    final url = Uri.parse('https://autolink.fun/register_user.php');
     final body = {
-      'username': _usernameController.text.trim(),
+      'first_name': _firstNameController.text.trim(),
+      'last_name': _lastNameController.text.trim(),
       'email': _emailController.text.trim(),
       'password': _passwordController.text.trim(),
     };
@@ -45,23 +69,21 @@ class _SignupScreenState extends State<SignupScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success']) {
-          // Navigate to login screen on success
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const LoginScreen()),
           );
         } else {
-          // Show error message
           _showError(data['message']);
         }
       } else {
-        _showError('Failed to register. Please try again.');
+        _showError('Failed to register. Server error.');
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showError('An error occurred. Please check your internet connection.');
+      _showError('An unexpected error occurred.');
     }
   }
 
@@ -103,7 +125,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   child: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () {
-                      Navigator.pop(context); // Go back to previous screen
+                      Navigator.pop(context); // Go back to the previous screen
                     },
                   ),
                 ),
@@ -132,9 +154,14 @@ class _SignupScreenState extends State<SignupScreen> {
                   child: Column(
                     children: [
                       CustomTextField(
-                        label: "Username",
+                        label: "First Name",
                         icon: Icons.person,
-                        controller: _usernameController,
+                        controller: _firstNameController,
+                      ),
+                      CustomTextField(
+                        label: "Last Name",
+                        icon: Icons.person_outline,
+                        controller: _lastNameController,
                       ),
                       CustomTextField(
                         label: "Email",
