@@ -12,16 +12,36 @@ class SignupScreen extends StatefulWidget {
   _SignupScreenState createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeInAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _fadeInAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeIn,
+    );
+
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
+    _animationController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
@@ -30,11 +50,7 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _registerUser() async {
-    print('First Name: ${_firstNameController.text}');
-    print('Last Name: ${_lastNameController.text}');
-    print('Email: ${_emailController.text}');
-    print('Password: ${_passwordController.text}');
-
+    // Validation: Ensure all fields are filled
     if (_firstNameController.text.trim().isEmpty ||
         _lastNameController.text.trim().isEmpty ||
         _emailController.text.trim().isEmpty ||
@@ -43,13 +59,16 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    final url = Uri.parse('https://autolink.fun/register_user.php');
+    final url = Uri.parse('https://autolink.fun/api/register_user.php');
+
     final body = {
       'first_name': _firstNameController.text.trim(),
       'last_name': _lastNameController.text.trim(),
       'email': _emailController.text.trim(),
       'password': _passwordController.text.trim(),
     };
+
+    print("Sending data: $body"); // Debugging log
 
     setState(() {
       _isLoading = true;
@@ -58,9 +77,12 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(body),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body,
       );
+
+      print('Response Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}'); // Debugging response
 
       setState(() {
         _isLoading = false;
@@ -68,22 +90,25 @@ class _SignupScreenState extends State<SignupScreen> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['success']) {
+
+        if (data['success'] == true) {
+          // Registration successful → Navigate to LoginScreen
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const LoginScreen()),
           );
         } else {
-          _showError(data['message']);
+          // Show error message from server
+          _showError(data['message'] ?? 'Registration failed.');
         }
       } else {
-        _showError('Failed to register. Server error.');
+        _showError('Server error: ${response.body}');
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showError('An unexpected error occurred.');
+      _showError('An unexpected error occurred: $e');
     }
   }
 
@@ -117,88 +142,91 @@ class _SignupScreenState extends State<SignupScreen> {
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () {
-                      Navigator.pop(context); // Go back to the previous screen
-                    },
+            child: FadeTransition(
+              opacity: _fadeInAnimation,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                    ),
                   ),
-                ),
-                const Text(
-                  "Create an Account",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                  const Text(
+                    "Create an Account",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      CustomTextField(
-                        label: "First Name",
-                        icon: Icons.person,
-                        controller: _firstNameController,
-                      ),
-                      CustomTextField(
-                        label: "Last Name",
-                        icon: Icons.person_outline,
-                        controller: _lastNameController,
-                      ),
-                      CustomTextField(
-                        label: "Email",
-                        icon: Icons.email,
-                        controller: _emailController,
-                      ),
-                      CustomTextField(
-                        label: "Password",
-                        isPassword: true,
-                        icon: Icons.lock,
-                        controller: _passwordController,
-                      ),
-                      const SizedBox(height: 20),
-                      _isLoading
-                          ? const CircularProgressIndicator()
-                          : CustomButton(
-                        text: "SIGN UP",
-                        onPressed: _registerUser,
-                      ),
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const LoginScreen()),
-                          );
-                        },
-                        child: const Text(
-                          "Already have an account? Login",
-                          style: TextStyle(color: Colors.black54),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          spreadRadius: 2,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        CustomTextField(
+                          label: "First Name",
+                          icon: Icons.person,
+                          controller: _firstNameController,
+                        ),
+                        CustomTextField(
+                          label: "Last Name",
+                          icon: Icons.person_outline,
+                          controller: _lastNameController,
+                        ),
+                        CustomTextField(
+                          label: "Email",
+                          icon: Icons.email,
+                          controller: _emailController,
+                        ),
+                        CustomTextField(
+                          label: "Password",
+                          isPassword: true,
+                          icon: Icons.lock,
+                          controller: _passwordController,
+                        ),
+                        const SizedBox(height: 20),
+                        _isLoading
+                            ? const CircularProgressIndicator()
+                            : CustomButton(
+                          text: "SIGN UP",
+                          onPressed: _registerUser,
+                        ),
+                        const SizedBox(height: 10),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginScreen()),
+                            );
+                          },
+                          child: const Text(
+                            "Already have an account? Login",
+                            style: TextStyle(color: Colors.black54),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

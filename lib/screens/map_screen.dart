@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../utils/location_service.dart';
 import 'drawer_screen.dart';
 import 'function_screen.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -18,21 +21,59 @@ class _MapScreenState extends State<MapScreen> {
   LatLng _userLocation = const LatLng(10.640739, 122.968956);
   final List<Marker> _markers = [];
 
-  void _getUserLocation() async {
-    Position? position = await LocationService.getCurrentPosition();
-    if (position != null) {
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-        _markers.add(
-          Marker(
-            point: _userLocation,
-            width: 50,
-            height: 50,
-            child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
-          ),
-        );
-        _mapController.move(_userLocation, 15);
-      });
+  Future<void> _getUserLocation() async {
+    LocationPermission permission = await Geolocator.requestPermission();
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Location permission denied")),
+      );
+      return;
+    }
+
+    Position? position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    setState(() {
+      _userLocation = LatLng(position.latitude, position.longitude);
+      _markers.clear();
+      _markers.add(
+        Marker(
+          point: _userLocation,
+          width: 50,
+          height: 50,
+          child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
+        ),
+      );
+      _mapController.move(_userLocation, 15);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Location: ${position.latitude}, ${position.longitude}"),
+      ),
+    );
+    }
+
+  Future<void> _uploadCoordinates() async {
+    final url = Uri.parse("https://autolink.fun/upload_loc.php");
+    final response = await http.post(
+      url,
+      body: {
+        "latitude": _userLocation.latitude.toString(),
+        "longitude": _userLocation.longitude.toString(),
+      },
+    );
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Coordinates uploaded successfully!")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to upload coordinates.")),
+      );
     }
   }
 
@@ -52,45 +93,60 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                subdomains: const ['a', 'b', 'c'],
+                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
               ),
-              MarkerLayer(
-                markers: _markers.toList(), // Convert to list if needed
+              TileLayer(
+                tileProvider: CancellableNetworkTileProvider(),
+                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
               ),
+              MarkerLayer(markers: _markers),
             ],
           ),
-          Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _getUserLocation,
-                  child: const Text("Tag Location"),
-                ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const FunctionScreen()),
-                );
-              },
-              child: const Row(
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.home, color: Colors.purple),
-                  SizedBox(width: 8),
-                  Text("Home"),
+                  FloatingActionButton(
+                    onPressed: _getUserLocation,
+                    backgroundColor: Colors.blue,
+                    child: const Icon(Icons.location_on, color: Colors.white),
+                  ),
+                  const SizedBox(width: 10),
+                  FloatingActionButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const FunctionScreen()),
+                      );
+                    },
+                    backgroundColor: Colors.green,
+                    child: const Icon(Icons.home, color: Colors.white),
+                  ),
+                  const SizedBox(width: 10),
+                  FloatingActionButton(
+                    onPressed: _uploadCoordinates,
+                    backgroundColor: Colors.orange,
+                    child: const Icon(Icons.upload, color: Colors.white),
+                  ),
                 ],
               ),
             ),
-
-          ]
-            ),
-          )
+          ),
         ],
       ),
     );
