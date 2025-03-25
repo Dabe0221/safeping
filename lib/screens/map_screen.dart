@@ -57,7 +57,7 @@ class _MapScreenState extends State<MapScreen> {
     }
 
   Future<void> _uploadCoordinates() async {
-    final url = Uri.parse("https://autolink.fun/upload_loc.php");
+    final url = Uri.parse("https://autolink.fun/api/upload_loc.php");
     final response = await http.post(
       url,
       body: {
