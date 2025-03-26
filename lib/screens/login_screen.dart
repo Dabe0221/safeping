@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'function_screen.dart';
 import 'signup_screen.dart';
 import '../widgets/custom_text_field.dart';
@@ -11,25 +14,57 @@ class LoginScreen extends StatefulWidget {
   _LoginScreenState createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
-  final TextEditingController _usernameController = TextEditingController();
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  bool _isAnimating = false;
-  double _opacity = 0;
-  double _scale = 0.8;
+  Future<void> _login() async {
+    String email = _emailController.text.trim();
+    String password = _passwordController.text.trim();
 
-  @override
-  void initState() {
-    super.initState();
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter both email and password")),
+      );
+      return;
+    }
 
-    Future.delayed(const Duration(milliseconds: 300), () {
-      setState(() {
-        _isAnimating = true;
-        _opacity = 1;
-        _scale = 1;
-      });
-    });
+    setState(() => _isLoading = true);
+
+    try {
+      var response = await http.post(
+        Uri.parse("https://autolink.fun/api/login.php"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email, "password": password}),
+      );
+
+      var responseData = jsonDecode(response.body);
+      if (responseData["status"] == "success") {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString("user_id", responseData["user"]["id"].toString());
+        await prefs.setString("user_email", responseData["user"]["email"]);
+        await prefs.setString("user_first_name", responseData["user"]["first_name"]);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Login Successful")),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FunctionScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(responseData["message"])),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Network error, please try again")),
+      );
+    }
+
+    setState(() => _isLoading = false);
   }
 
   @override
@@ -51,82 +86,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               children: [
                 const Text(
                   "Welcome to Safe Ping",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 20),
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 700),
-                  opacity: _opacity,
-                  child: AnimatedScale(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeOutBack,
-                    scale: _scale,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 700),
-                      curve: Curves.easeInOut,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(_isAnimating ? 20 : 0),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          CustomTextField(
-                            label: "Username",
-                            icon: Icons.person,
-                            controller: _usernameController,
-                          ),
-                          CustomTextField(
-                            label: "Password",
-                            isPassword: true,
-                            icon: Icons.lock,
-                            controller: _passwordController,
-                          ),
-                          const SizedBox(height: 20),
-                          CustomButton(
-                            text: "LOGIN",
-                            onPressed: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (context) => const FunctionScreen()),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          CustomButton(
-                            text: "SIGN UP",
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const SignupScreen()),
-                              );
-                            },
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              // Forgot password functionality can be added here
-                            },
-                            child: const Text(
-                              "Forgot Password?",
-                              style: TextStyle(color: Colors.black54),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                _buildLoginForm(),
               ],
             ),
           ),
@@ -135,9 +98,35 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
+  Widget _buildLoginForm() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, spreadRadius: 2)],
+      ),
+      child: Column(
+        children: [
+          CustomTextField(label: "Email", icon: Icons.email, controller: _emailController),
+          CustomTextField(label: "Password", isPassword: true, icon: Icons.lock, controller: _passwordController),
+          const SizedBox(height: 20),
+          _isLoading
+              ? const CircularProgressIndicator()
+              : CustomButton(text: "LOGIN", onPressed: _login),
+          const SizedBox(height: 10),
+          CustomButton(
+            text: "SIGN UP",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupScreen())),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
