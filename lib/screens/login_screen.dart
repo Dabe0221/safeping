@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'function_screen.dart';
+import 'drawer_screen.dart';
 import 'signup_screen.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const FunctionScreen()),
+          MaterialPageRoute(builder: (context) => const DrawerScreen()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

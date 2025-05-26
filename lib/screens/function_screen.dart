@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
+import 'package:geolocator/geolocator.dart';
+
 import 'drawer_screen.dart';
+import 'map_screen.dart';
 
 class FunctionScreen extends StatefulWidget {
   const FunctionScreen({super.key});
@@ -56,6 +59,7 @@ class _FunctionScreenState extends State<FunctionScreen> {
       );
       return;
     }
+
     _showConfirmationDialog();
   }
 
@@ -69,15 +73,27 @@ class _FunctionScreenState extends State<FunctionScreen> {
 
     setState(() => _isUploading = true);
 
+    Position? position;
+    try {
+      position = await _getCurrentLocation();
+    } catch (e) {
+      debugPrint("Location Error: $e");
+    }
+
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("https://autolink.fun/api/upload_post.php"),
+        Uri.parse("https://autolink.fun/api/upload_loc.php"),
       );
 
       request.fields["user_id"] = userId!;
       request.fields["email"] = userEmail!;
       request.fields["comments"] = _commentsController.text.trim();
+
+      if (position != null) {
+        request.fields["latitude"] = position.latitude.toString();
+        request.fields["longitude"] = position.longitude.toString();
+      }
 
       if (kIsWeb && _webImage != null) {
         request.files.add(http.MultipartFile.fromBytes(
@@ -114,6 +130,22 @@ class _FunctionScreenState extends State<FunctionScreen> {
     setState(() => _isUploading = false);
   }
 
+  Future<Position?> _getCurrentLocation() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return null;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    return await Geolocator.getCurrentPosition();
+  }
+
   void _showConfirmationDialog() {
     showDialog(
       context: context,
@@ -142,25 +174,37 @@ class _FunctionScreenState extends State<FunctionScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Safe Ping"), backgroundColor: const Color(0xFF651FFF)),
       drawer: const DrawerScreen(),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF904E95), Color(0xFFe96443)],
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF904E95), Color(0xFFe96443)],
+            ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildImageHolder(),
-              const SizedBox(height: 20),
-              _buildCommentBox(),
-              const Spacer(),
-              _isUploading ? const CircularProgressIndicator() : _buildTagLocationButton(),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: Column(
+                      children: [
+                        _buildImageHolder(),
+                        const SizedBox(height: 20),
+                        _buildCommentBox(),
+                      ],
+                    ),
+                  ),
+                ),
+                _isUploading
+                    ? const CircularProgressIndicator()
+                    : _buildTagLocationButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -169,7 +213,7 @@ class _FunctionScreenState extends State<FunctionScreen> {
 
   Widget _buildImageHolder() {
     return GestureDetector(
-      onTap: () => _showImageSourceDialog(),
+      onTap: _showImageSourceDialog,
       child: Container(
         width: double.infinity,
         height: 200,
